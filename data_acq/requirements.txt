@@ -1,0 +1,6 @@
+argparse==1.2.1
+dryscrape==1.0
+lxml==3.4.4
+webkit-server==1.0
+wsgiref==0.1.2
+xvfbwrapper==0.2.5
