@@ -11,7 +11,7 @@ RECENT_USERS_XPATH = ('//*[@id="content"]/table/tbody/tr/td[1]/table'
 def scrape_recent_mal_users(session):
     """Returns a list of users from MAL's recent users page.
 
-    session - a dryscrpage session object that can be used for the scraping.
+    session - a dryscrape session object that can be used for the scraping.
     """
     session.visit(MAL_RECENT_USERS_URL)
     page_body = session.body()
