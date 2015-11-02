@@ -1,1 +1,1 @@
-Anime Recomender System project for EECS 445
+Anime Recommender System project for EECS 445
