@@ -1,6 +1,24 @@
 # Anime Recommender System project for EECS 445
 
-## MyAnimeList User Scores table format
+
+## MyAnimeList User Scores database
+
+### Database used
+
+For simplicity, I'm currently using sqlite3 for the database for the
+scores. I might switch to a more heavy-duty database engine in the
+future, but sqlite3 should be fine for now.
+
+A sample of the database with around ~275 users and ~85,000 ratings is
+stored in `data_acq/mal_users.db`.
+
+For using the sqlite3 database in python,
+[here](http://zetcode.com/db/sqlitepythontutorial/) is a tutorial, and
+[here](https://docs.python.org/2/library/sqlite3.html) is the
+documentation for the DB-API inferface.
+
+
+### User scores table format
 
 The MyAnimeList User Scores table has four columns: user\_name,
 anime\_name, status, and score.
