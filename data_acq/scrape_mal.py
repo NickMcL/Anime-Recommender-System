@@ -1,12 +1,14 @@
 import dryscrape
 import sqlite3
 from lxml import html
+from random import random
+from time import sleep
 
 MAL_RECENT_USERS_URL = 'http://myanimelist.net/users.php'
 
 MAL_USER_ANIME_LIST_URL_FORMAT = 'http://myanimelist.net/animelist/{username}'
 
-MAL_ANIME_LIST_STOP_STATUS = 'Plan to Watch'
+MAL_ANIME_LIST_STOP_STATUS = u'Plan to Watch'
 
 
 # This XPath expression will get all of the recent users listed on MAL's recent
@@ -27,9 +29,9 @@ GET_TABLE_ANIME_NAME_XPATH = './/*[@class="animetitle"]/span/text()'
 GET_TABLE_ANIME_SCORE_XPATH = './/td[3]/text()'
 
 
-MAL_USER_DB_NAME = 'mal_users.db'
+MAL_USER_DB_NAME = u'mal_users.db'
 
-MAL_USER_SCORES_TABLE_NAME = 'MALUserScores'
+MAL_USER_SCORES_TABLE_NAME = u'MALUserScores'
 
 
 class MALUserScore:
@@ -44,9 +46,11 @@ class MALUserScore:
         self.score = score
 
     def write_to_db(self, cursor, table_name):
-        db_score = self.score if self.score != -1 else 'NULL'
-        cursor.execute('INSERT INTO {0} VALUES(?,?,?,?)'.format(table_name),
-                       [self.user_name, self.anime_name, self.status,
+        db_score = self.score if self.score is None else self.score.decode('utf-8')
+        cursor.execute(u'INSERT INTO {0} VALUES(?,?,?,?)'.format(table_name),
+                       [self.user_name.decode('utf-8'),
+                        self.anime_name.decode('utf-8'),
+                        self.status.decode('utf-8'),
                         db_score]);
 
     def __repr__(self):
@@ -61,7 +65,7 @@ def scrape_recent_mal_users(session):
     """
     session.visit(MAL_RECENT_USERS_URL)
     page_tree = html.fromstring(session.body())
-    return page_tree.xpath(RECENT_USERS_XPATH)
+    return [u.encode('utf-8') for u in page_tree.xpath(RECENT_USERS_XPATH)]
 
 def get_mal_user_scores(session, mal_user):
     """Returns a list of MALUserScore objects with the scores for the given
@@ -75,12 +79,17 @@ def get_mal_user_scores(session, mal_user):
     page_tree = html.fromstring(session.body())
 
     page_tables = page_tree.xpath(ANIME_LIST_TABLES_XPATH)
+    # There will be no table objects on the page if the user made their anime
+    # list private.
+    if len(page_tables) == 0:
+        return []
+
     page_tables.pop(0)  # The first table is a navigation bar
     for table in page_tables:
         # Check if the table holds a status type
         table_status = table.xpath(GET_TABLE_STATUS_XPATH)
         if len(table_status) > 0:
-            current_status = str(table_status[0])
+            current_status = table_status[0].encode('utf-8')
             if current_status == MAL_ANIME_LIST_STOP_STATUS:
                 break
             continue
@@ -95,9 +104,45 @@ def get_mal_user_scores(session, mal_user):
 
         # Create MALUserScore object with the score info from this table
         anime_name = table.xpath(GET_TABLE_ANIME_NAME_XPATH)[0].encode('utf-8')
-        score = str(table.xpath(GET_TABLE_ANIME_SCORE_XPATH)[0])
-        score = int(score) if score.isdigit() else -1
+        score = table.xpath(GET_TABLE_ANIME_SCORE_XPATH)[0].encode('utf-8')
+        score = score if score.isdigit() else None
         anime_scores.append(
                 MALUserScore(mal_user, anime_name, current_status, score))
 
     return anime_scores
+
+def mine_mal_scores(min_delay, iterations):
+    """Mine MAL user scores and insert them into a database.
+
+    min_delay - the minimum number of minutes to wait between each request to
+                MAL.
+    iterations - the number of mining iterations to do. Each iteration checks
+                 15 MAL users.
+    """
+    conn = sqlite3.connect(MAL_USER_DB_NAME)
+    cur = conn.cursor()
+
+    session = dryscrape.Session()
+    session.set_attribute('auto_load_images', False)
+    for i in range(iterations):
+        mal_users = scrape_recent_mal_users(session)
+        for mal_user in mal_users:
+            # Space out requests to avoid spamming MAL servers
+            sleep(min_delay * 60 + random() * 60)
+            print u'Mining scores for user: {0}'.format(mal_user)
+            scores = get_mal_user_scores(session, mal_user)
+
+            # Only keep users with over 5 scores
+            total_scores = sum(1 for s in scores if s.score is not None)
+            print u'User had {0} scores.\n'.format(total_scores)
+            if total_scores < 5:
+                continue
+
+            try:
+                for score in scores:
+                    score.write_to_db(cur, MAL_USER_SCORES_TABLE_NAME)
+            except:
+                conn.close()
+                raise
+            conn.commit()
+    conn.close()
