@@ -18,7 +18,7 @@ RECENT_USERS_XPATH = ('//*[@id="content"]/table/tbody/tr/td[1]/table'
 
 ANIME_LIST_TABLES_XPATH = '//*[@id="list_surround"]/table'
 
-GET_TABLE_STATUS_XPATH = './/*[@class="header_title"]/span/text()'
+GET_TABLE_STATUS_XPATH = './/*[@class="header_title"]/span'
 
 GET_TABLE_HEADER_XPATH = './/*[@class="table_header"]'
 
@@ -32,6 +32,9 @@ GET_TABLE_ANIME_SCORE_XPATH = './/td[3]/text()'
 MAL_USER_DB_NAME = u'mal_users.db'
 
 MAL_USER_SCORES_TABLE_NAME = u'MALUserScores'
+
+# A MAL user must have at least this many scores to be stored in the database
+MIN_SCORES_FOR_STORAGE = 5
 
 
 class MALUserScore:
@@ -89,7 +92,12 @@ def get_mal_user_scores(session, mal_user):
         # Check if the table holds a status type
         table_status = table.xpath(GET_TABLE_STATUS_XPATH)
         if len(table_status) > 0:
-            current_status = table_status[0].encode('utf-8')
+            # The text attribute is None when the element has no text in it
+            if table_status[0].text is None:
+                current_status = ''
+            else:
+                current_status = table_status[0].text.encode('utf-8')
+
             if current_status == MAL_ANIME_LIST_STOP_STATUS:
                 break
             continue
@@ -132,10 +140,10 @@ def mine_mal_scores(min_delay, iterations):
             print u'Mining scores for user: {0}'.format(mal_user)
             scores = get_mal_user_scores(session, mal_user)
 
-            # Only keep users with over 5 scores
+            # Only keep users that have are least the minimum number of scores.
             total_scores = sum(1 for s in scores if s.score is not None)
             print u'User had {0} scores.\n'.format(total_scores)
-            if total_scores < 5:
+            if total_scores < MIN_SCORES_FOR_STORAGE:
                 continue
 
             try:
