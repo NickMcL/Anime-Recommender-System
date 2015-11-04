@@ -111,8 +111,14 @@ def get_mal_user_scores(session, mal_user):
             continue
 
         # Create MALUserScore object with the score info from this table
-        anime_name = table.xpath(GET_TABLE_ANIME_NAME_XPATH)[0].encode('utf-8')
-        score = table.xpath(GET_TABLE_ANIME_SCORE_XPATH)[0].encode('utf-8')
+        try:
+            anime_name = table.xpath(GET_TABLE_ANIME_NAME_XPATH)[0].encode('utf-8')
+            score = table.xpath(GET_TABLE_ANIME_SCORE_XPATH)[0].encode('utf-8')
+        except IndexError:
+            # If an IndexError occurs, the anime list page uses custom
+            # formatting instead of the default, so don't try to parse it
+            return []
+
         score = score if score.isdigit() else None
         anime_scores.append(
                 MALUserScore(mal_user, anime_name, current_status, score))
@@ -140,7 +146,7 @@ def mine_mal_scores(min_delay, iterations):
             print u'Mining scores for user: {0}'.format(mal_user)
             scores = get_mal_user_scores(session, mal_user)
 
-            # Only keep users that have are least the minimum number of scores.
+            # Only keep users that have are least the minimum number of scores
             total_scores = sum(1 for s in scores if s.score is not None)
             print u'User had {0} scores.\n'.format(total_scores)
             if total_scores < MIN_SCORES_FOR_STORAGE:
