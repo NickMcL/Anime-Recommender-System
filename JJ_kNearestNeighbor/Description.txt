@@ -1,5 +1,21 @@
+Input data
+Create matrix matching show_name to index
+
 1) Find people who have watched and rated the same shows, and more, than our input user.
+
+Create matrix of show_names X user_names (rows X cols), where each element ij is 1 if user j watched show i, 0 otherwise
+Calculate distance between input user and all other users (distance = sum over all shows I[input user has rated the show and comparison user has not)]
+Grab x closest users and put them into a new matrix
 
 2) Among these people, find the k users who give normalized ratings in a similar fashion to our input user.
 
+Normalize ratings of each user (column).
+Calculate distance between input user and all other users, normalized by number of shows compared (distance = sum of differences in ratings, divided by sqrt(sum of (differences squared)), for each show that both users watched).
+Grab the k closest users to our input user.
+
 3) Among the k best matching users, find the show most highly rated but not yet watched by input user.
+
+Filter out all rows (shows) that the input user has already watched (not necessarily the same as already rated).
+For each show, if it has been watched by at least n of our remaining k users, take the average of all k user ratings.
+Grab the highest average show rating and return.
+
