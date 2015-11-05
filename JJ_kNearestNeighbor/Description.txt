@@ -1,0 +1,5 @@
+1) Find people who have watched and rated the same shows, and more, than our input user.
+
+2) Among these people, find the k users who give normalized ratings in a similar fashion to our input user.
+
+3) Among the k best matching users, find the show most highly rated but not yet watched by input user.
