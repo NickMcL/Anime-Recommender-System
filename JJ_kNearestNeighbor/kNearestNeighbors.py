@@ -1,5 +1,6 @@
 import numpy as np
 import sqlite3 as sql
+import math
 
 con = sql.connect('../data_acq/mal_users.db')
 
@@ -59,7 +60,7 @@ for user in userIndexList[1, :]:
 	userIndex += 1
 
 
-#just arbitrary for now (no input)
+#TODO just arbitrary for now (no input)
 inputUser = userScores[:,7]
 
 #part 1 of our kNN
@@ -73,7 +74,7 @@ for i in range(0,numAnimes):
 
 #distance of users
 userDistances = np.zeros((1, numUsers))
-#just arbitrary for now (no input)
+#TODO just arbitrary for now (no input)
 inputUserWatched = userWatched[:,7]
 
 #finds the distances of the users to the input user
@@ -85,11 +86,46 @@ for i in range(0,numUsers):
 	userDistances[0, i] = distanceSum
 
 #number of users we will be wanting to use that are closest to input
-numUsersWanted = numUsers / 10
+numFilteredUsers = numUsers / 10
 
 #row of indices over row of distances
 userDistanceIndexMatrix = np.vstack([userIndexList[0,:], userDistances[0,:]])
-filteredUserIndices = (userDistanceIndexMatrix[1,:].argsort())[:numUsersWanted]
+#TODO once inputUser is made into a input user instead of a user being used.
+filteredUserIndices = (userDistanceIndexMatrix[1,:].argsort())[1:numFilteredUsers + 1]
 
-print filteredUserIndices
+#print filteredUserIndices
 
+#creates empty matrix for the filtered normalized users scores
+filteredNormalizedUserScores = np.zeros((numAnimes, numFilteredUsers))
+filteredUserDistance = np.zeros(numFilteredUsers)
+
+#TODO find way to normalize
+
+for i in range(0, numFilteredUsers):
+	#print userScores[:,filteredUserIndices[i]]
+	#magnitude = np.linalg.norm(np.nan_to_num(userScores[:,filteredUserIndices[i]]))
+	#filteredNormalizedUserScores[:, i] = userScores[:,filteredUserIndices[i]] / magnitude
+	#print filteredNormalizedUserScores[:,i]
+	#print "\n"
+	filteredNormalizedUserScores[:, i] = userScores[:,filteredUserIndices[i]]
+	numerator = 0
+	denominator = 0
+#	numShowsCompared = 0
+	for j in range(0, numAnimes):
+		if (np.nan_to_num(inputUser[j]) != 0 and np.nan_to_num(filteredNormalizedUserScores[j,i]) != 0):
+			difference = abs(np.nan_to_num(filteredNormalizedUserScores[j,i]) - inputUser[j])
+			numerator += difference
+			denominator += (difference*difference)
+#			numShowsCompared += 1
+	denominator = math.sqrt(denominator)
+	filteredUserDistance[i] = numerator/denominator	
+	print filteredUserDistance[i]
+numNearestNeighbors = numFilteredUsers / 5
+filteredUserDistanceIndices = np.vstack([filteredUserIndices, filteredUserDistance])
+kNearestNeighbors = (filteredUserDistanceIndices[1,:].argsort())[:numNearestNeighbors]
+for i in range(0, numNearestNeighbors):
+	kNearestNeighbors[i] = filteredUserIndices[kNearestNeighbors[i]]
+print kNearestNeighbors 
+
+#PART 3: Finding the next show to watch
+	
