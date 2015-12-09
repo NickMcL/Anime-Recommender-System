@@ -6,11 +6,16 @@
 ### Database used
 
 For simplicity, I'm currently using sqlite3 for the database for the
-scores. I might switch to a more heavy-duty database engine in the
-future, but sqlite3 should be fine for now.
+scores.
 
-A sample of the database with around ~275 users and ~85,000 ratings is
-stored in `data_acq/mal_users.db`.
+The full training, validation, and test sets are available in the
+database file
+[here](https://mega.nz/#!Ch1kiZYI!94NUzFEc62QojCINUhm-GTCYXECaQqZCXFJsItNYfOE).
+This data set should be used for getting the final results for our dataset.
+
+A database with a smaller training, validation, and test set is
+available in `small_rating_sets.db`. This database can be used to test
+models to make sure they are working correctly.
 
 For using the sqlite3 database in python,
 [here](http://zetcode.com/db/sqlitepythontutorial/) is a tutorial, and
@@ -20,24 +25,14 @@ documentation for the DB-API inferface.
 
 ### User scores table format
 
-The MyAnimeList User Scores table has four columns: user\_name,
-anime\_name, status, and score.
+The Ratings tables in our databases have four columns: user\_id,
+anime\_name, and score.
 
-- user\_name - A string containing the name of a MyAnimeList user.
+- user\_id - A string containing the md5 hash of a username from MAL.
+  This is hashed to anonymize the user.
 
 - anime\_name - A string containing the name of the anime rated by the
 user.
 
-- status - A string containing the current status of the user for this
-  anime. It can be one of the following values:
-  * Watching - The user is currently in the middle of watching this
-    anime, but has not yet completed it.
-  * Completed - The user has completed watching this anime.
-  * On-Hold - The user has stalled watching this anime, but plans to
-    start watching it again at a later time.
-  * Dropped - The user stopped watching this anime before finishing it,
-    and does not plan to start watching it again.
-
 - score - An integer of the score the user gave for this anime. The
-  score can be any number between 1 and 10. If the user did not score
-  this anime, this field will be NULL.
+  score can be any number between 1 and 10.
