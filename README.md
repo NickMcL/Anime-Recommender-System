@@ -25,7 +25,7 @@ documentation for the DB-API inferface.
 
 ### User scores table format
 
-The Ratings tables in our databases have four columns: user\_id,
+The Ratings tables in our databases have three columns: user\_id,
 anime\_name, and score.
 
 - user\_id - A string containing the md5 hash of a username from MAL.
