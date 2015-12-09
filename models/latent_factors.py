@@ -11,7 +11,7 @@ class LatentFactorModel:
         self.train_ratings = train_ratings
         self.total_factors = total_factors
         self.norm_factor = norm_factor
-        self.learning_rate = learning_rate
+        self.start_learning_rate = learning_rate
         self.iterations = iterations
         self.use_biases = use_biases
 
@@ -29,12 +29,12 @@ class LatentFactorModel:
             # Print progress
             if i % 5 == 0:
                 print i
-            #learning_rate = (
-                    #float(start_learning_rate) /
-                    #(1 + i * start_learning_rate))
+            learning_rate = (
+                    float(self.start_learning_rate) /
+                    (1 + i * self.start_learning_rate))
 
             for rating in self.train_ratings:
-                successful = self._update_model(rating)
+                successful = self._update_model(rating, learning_rate)
                 if not successful:
                     return False
         return True
@@ -79,7 +79,7 @@ class LatentFactorModel:
         rating_total = sum(avg for item, avg in item_ratings.items())
         return rating_total / len(item_ratings)
 
-    def _update_model(self, rating):
+    def _update_model(self, rating, learning_rate):
         user_vector = self._get_user_vector(rating.user)
         item_vector = self._get_item_vector(rating.item)
         if self.use_biases:
@@ -92,22 +92,22 @@ class LatentFactorModel:
         # Determine gradient for parameters
         error = (rating.score - self.rating_average - user_bias -
                  item_bias - np.dot(user_vector, item_vector))
-        userv_grad = (np.multiply(self.learning_rate,
+        userv_grad = (np.multiply(learning_rate,
             np.subtract(
                 np.multiply(error, item_vector),
                 np.multiply(self.norm_factor, user_vector)
             )
         ))
-        itemv_grad = (np.multiply(self.learning_rate,
+        itemv_grad = (np.multiply(learning_rate,
             np.subtract(
                 np.multiply(error, user_vector),
                 np.multiply(self.norm_factor, item_vector)
             )
         ))
         if self.use_biases:
-            userb_grad = (self.learning_rate *
+            userb_grad = (learning_rate *
                     (error - self.norm_factor * user_bias))
-            itemb_grad = (self.learning_rate *
+            itemb_grad = (learning_rate *
                     (error - self.norm_factor * item_bias))
 
         # Update parameters
@@ -119,7 +119,7 @@ class LatentFactorModel:
             self.user_biases[rating.user] = user_bias + userb_grad
             self.item_biases[rating.item] = item_bias + itemb_grad
 
-        # Things went wrong if NaNs are showing up, so break
+        # Things went wrong if NaNs are showing up
         if any(np.isnan(item_vector)) or any(np.isnan(user_vector)):
             print 'NaN in vectors'
             return False
