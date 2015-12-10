@@ -7,6 +7,29 @@ class BadRatiosException(Exception):
     pass
 
 
+def create_implicit_feedback_set(source_db_path, dest_db_path,
+                                 ratings_table_name):
+    imp_table_name = ratings_table_name + 'Imp'
+
+    source_conn = sqlite3.connect(source_db_path)
+    dest_conn = sqlite3.connect(dest_db_path)
+    with source_conn, dest_conn:
+        scur = source_conn.cursor()
+        dcur = dest_conn.cursor()
+
+        dcur.execute('DROP TABLE IF EXISTS {0}'.format(imp_table_name))
+        dcur.execute('''CREATE TABLE {0} (
+                       user_id TEXT NOT NULL,
+                       anime_name TEXT NOT NULL,
+                       status TEXT NOT NULL)'''.format(imp_table_name))
+
+        scur.execute('''SELECT user_id, anime_name, status FROM {0}
+                        WHERE score IS NULL'''.format(ratings_table_name))
+
+        insert_into_table(dcur, imp_table_name, scur.fetchall())
+        source_conn.commit()
+
+
 def create_ml_sets(source_db_path, dest_db_path, ratings_table_name,
                    train_percent, valid_percent, max_users=None):
     """Splits the source rating data into a training, validation, and test set
