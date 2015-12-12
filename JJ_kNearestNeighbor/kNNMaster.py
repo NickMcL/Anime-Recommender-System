@@ -117,14 +117,82 @@ def watchedMatrix(cursor, userScores, numAnime, numUsers):
 	    for j in range(0,numUsers):
 		    if (userScores[i,j] != 0):
 			    userWatched[i,j] = 1
+    
+    return userWatched
 
-
-def kNN(cursor, animeIndexList, userIndexList, userScores, userWatchedList)
+def kNN(cursor, animeIndexList, userIndexList, userScores, userWatched, k):
     print("Calculating kNN for input user")
     #calculates the number of anime and users
     numAnime = len(userIndexList[1, :])
     numUsers = len(animeIndexList[1, :])
 
+    userWatchedDistances = getWatchedDistances(userWatched, numUsers, numAnime)
+    
+    #number of users we will be wanting to use that are closest to input
+    numFilteredUsers = numUsers / 10
+   
+    #filter users by how many shows they've watched in common with input user
+    filteredUserIndices = getFilteredUserIndices(userIndexList, userWatchedDistances, numFilteredUsers)
+    
+    #creates empty matrix for the filtered-users scores
+    filteredUserScores = np.zeros((numAnime, numFilteredUsers))
+    #creates empty matrix for the filtered-users' score distances to input user
+    filteredUserDistance = np.zeros(numFilteredUsers)
+
+    for i in range(0, numFilteredUsers):
+        #fill in this user's scores list from the userScores matrix
+        filteredUserScores[:, i] = userScores[:, filteredUserIndices[i]]
+        
+        #numerator is sum of abs(differences in scores)
+        #between input user and comparison user
+        numerator = 0
+        #denominator is sqrt(sum(differences^2)) in scores
+        #between input user and comparison user
+        denominator = 0
+        #number of shows watched in common TODO: Use this somehow
+        numShowsInCommon = 0
+
+        for j in range(0, numAnime):
+            #if both the input user and the comparison user watched this show
+            if (np.nan_to_num(inputUser[j]) != 0 and np.nan_to_num(filteredUserScores[j, i] != 0):
+                #take the abs(difference) of their shows and add to numerator
+                diff = abs(np.nan_to_num(filteredUserScores[j,i]) - np.nan_to_num(inputUser[j])
+                numerator += diff
+                #add square of difference to denominator
+                denominator += (diff*diff)
+                #increment number of shows watched in common
+                numShowsInCommon += 1
+        denominator = math.sqrt(denominator)
+        
+        filteredUserDistance[i] = numerator/denominator
+    #row of filtered-user indices over row of filtered-user distances
+    filteredUserDistanceIndices = np.vstack([filteredUserIndices, filteredUserDistances])
+
+    #retun the k-nearest neighbors to input user
+    return (filteredUserDistanceIndices[1,:].argsort())[:k]
+
+def getFilteredUserIndices(userIndexList, userWatchedDistances, numFilteredUsers):
+    #row of indices over row of distances
+    userDistanceIndexMatrix = np.vstack([userIndexList[0,:], userDistances[0,:])
+    
+    #TODO change once inputUser is made separate from rest of input
+    return (userDistanceIndexMatrix[1,:].argsort())[1:numFilteredUsers + 1]
+
+def getWatchedDistances(userWatched, numUsers, numAnime):
+    #distance of users to input user list initialized with 0s
+    userDistances = np.zeros((1, numUsers))
+    #TODO just arbitrary input for now
+    inputUserWatched = userWatched[:, 7]
+    
+    #finds the distances of the users to the input user
+    for i in range(0, numUsers):
+        distanceSum = 0
+        for j in range(0, numAnime):
+            if (inputUserWatched[j] == 1 and userWatched[j, i] == 0):
+                distanceSum += 1
+        userDistances[0, i] = distanceSum
+    
+    return userDistances
 
 def main():
     print("Starting kNN Anime Recommender:")
