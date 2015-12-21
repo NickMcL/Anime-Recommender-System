@@ -2,6 +2,10 @@ import numpy as np
 
 from collections import defaultdict
 
+class ModelException(Exception):
+    pass
+
+
 class NaiveAverageModel:
 
     def __init__(self, train_ratings):
@@ -40,4 +44,11 @@ class NaiveAverageModel:
                     k, diff_totals[k],
                     100 * (float(diff_totals[k]) / len(test_ratings)))
         return rmse
+
+    def predict(self, test_user, test_item):
+        guess = self.item_ratings.get(test_item)
+        if guess is None:
+            raise ModelException(
+                    'Item ({0}) is not in the model'.format(test_item))
+        return guess
 

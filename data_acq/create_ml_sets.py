@@ -7,6 +7,61 @@ class BadRatiosException(Exception):
     pass
 
 
+def create_topk_test_db(source_db_path, dest_db_path, val_table_name,
+                        anime_table_name, topk_percent, topk_min, topk_max,
+                        rand_anime_amount):
+    topk_test_table_name = 'TopKTestData'
+
+    source_conn = sqlite3.connect(source_db_path)
+    dest_conn = sqlite3.connect(dest_db_path)
+    with source_conn, dest_conn:
+        scur = source_conn.cursor()
+        dcur = dest_conn.cursor()
+
+        dcur.execute('DROP TABLE IF EXISTS {0}'.format(topk_test_table_name))
+        dcur.execute('''CREATE TABLE {0} (
+                       user_id TEXT NOT NULL,
+                       anime_name TEXT NOT NULL,
+                       rand_anime_name TEXT NOT NULL)'''.format(
+                           topk_test_table_name))
+
+        scur.execute('''SELECT DISTINCT anime_name FROM {0}'''.format(
+                anime_table_name))
+        all_anime = [r[0] for r in scur.fetchall()]
+
+        scur.execute('''SELECT DISTINCT user_id FROM {0}'''.format(
+                val_table_name))
+        all_users = [r[0] for r in scur.fetchall()]
+
+        cntr = 0
+        for user in all_users:
+            scur.execute('''SELECT anime_name, score FROM {0}
+                            WHERE user_id=?'''.format(val_table_name),
+                            [user,])
+            user_scores = scur.fetchall()
+            topk_amount = max(topk_min,
+                    min(topk_max, int(round(len(user_scores) * topk_percent))))
+            sorted_scores = sorted(
+                    user_scores, key=lambda r: r[1], reverse=True)
+            for score_pair in sorted_scores[:topk_amount]:
+                shuffle(all_anime)
+                scored_anime_index = all_anime.index(score_pair[0])
+                if scored_anime_index < rand_anime_amount:
+                    all_anime[scored_anime_index], \
+                            all_anime[rand_anime_amount] = \
+                            all_anime[rand_anime_amount], \
+                            all_anime[scored_anime_index]
+
+                for rand_anime in all_anime[:rand_anime_amount]:
+                    insert_into_table(dcur, topk_test_table_name,
+                            ((user, score_pair[0], rand_anime),))
+
+            dest_conn.commit()
+            cntr += 1
+            if cntr % 50 == 0:
+                print cntr
+
+
 def create_implicit_feedback_set(source_db_path, dest_db_path,
                                  ratings_table_name):
     imp_table_name = ratings_table_name + 'Imp'

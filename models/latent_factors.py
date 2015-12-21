@@ -6,6 +6,10 @@ import numpy as np
 
 from collections import defaultdict
 
+class ModelException(Exception):
+    pass
+
+
 class LatentFactorModel:
     PICKLE_FILE_NAME = ('{imp}_{biases}_{total_factors}_{norm_factor}_'
                         '{learning_rate}_{iterations}')
@@ -97,6 +101,24 @@ class LatentFactorModel:
                     k, diff_totals[k],
                     100 * (float(diff_totals[k]) / len(test_ratings)))
         return rmse
+
+    def predict(self, test_user, test_item):
+        uv = self.user_vectors.get(test_user)
+        iv = self.item_vectors.get(test_item)
+        if self.use_biases:
+            ub = self.user_biases.get(test_user)
+            ib = self.item_biases.get(test_item)
+        else:
+            ub = 0
+            ib = 0
+        if uv is None or ub is None:
+            raise ModelException('User ({0}) not in model'.format(test_user))
+        if iv is None or ib is None:
+            raise ModelException('Item ({0}) not in model'.format(test_item))
+
+        imp_uv = self._get_imp_user_vector(test_user, uv)
+        guess = self.rating_average + ub + ib + np.dot(imp_uv, iv)
+        return guess
 
     def _pickle_model(self, training_iterations):
         file_name = self.PICKLE_FILE_NAME.format(

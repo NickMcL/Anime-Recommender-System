@@ -1,5 +1,7 @@
 import sqlite3
 
+from collections import defaultdict
+
 DROPPED_STATUS = 'Dropped'
 COMPLETED_STATUS = 'Completed'
 ON_HOLD_STATUS = 'On-Hold'
@@ -37,6 +39,56 @@ class ImplicitFeedback:
 
     def is_positive(self):
         return self.status != DROPPED_STATUS
+
+
+def topk_test(topk_data_db_path, topk_data_table_name, model, rand_anime_total):
+    anime_ranks = defaultdict(int)
+    user_anime_pairs = defaultdict(list)
+    conn = sqlite3.connect(topk_data_db_path)
+    with conn:
+        cur = conn.cursor()
+        cur.execute('''SELECT user_id, anime_name, rand_anime_name
+                       FROM {0}'''.format(topk_data_table_name))
+        while True:
+            row = cur.fetchone()
+            if row is None:
+                break
+            user_anime_pairs[(row[0], row[1])].append(row[2])
+
+    cntr = 0
+    for user_anime_pair, rand_anime in user_anime_pairs.iteritems():
+        score_predictions = []
+        for anime in rand_anime:
+            score_predictions.append((
+                model.predict(user_anime_pair[0], anime),
+                anime
+            ))
+        score_predictions.append((
+            model.predict(user_anime_pair[0], user_anime_pair[1]),
+            user_anime_pair[1]
+        ))
+        sorted_predictions = sorted(score_predictions, key=lambda i: i[0],
+                reverse=True)
+        rank = [s[1] for s in sorted_predictions].index(user_anime_pair[1])
+        anime_ranks[rank] += 1
+
+        cntr += 1
+        if cntr % 200 == 0:
+            print cntr
+
+    rank_distribution_x = []
+    rank_distribution_y = []
+    total_pairs = len(user_anime_pairs)
+    cummulative_total = 0
+    cntr = 0
+    for possible_rank in xrange(rand_anime_total + 1):
+        rank_total = anime_ranks.get(possible_rank)
+        if rank_total is not None:
+            cummulative_total += float(rank_total) / total_pairs
+            cntr += rank_total
+        rank_distribution_x.append(float(possible_rank) / rand_anime_total)
+        rank_distribution_y.append(cummulative_total)
+    return (rank_distribution_x, rank_distribution_y)
 
 
 def get_ratings_from_db(db_path, table_name):
