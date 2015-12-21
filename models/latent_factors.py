@@ -1,33 +1,59 @@
+# Objects for working with a latent factors model.
+
 import dill
 import math
 import os
 import random
 import numpy as np
-
 from collections import defaultdict
 
 class ModelException(Exception):
+    """Indicates that there was an error within the model"""
     pass
 
 
 class LatentFactorModel:
+    """Object that encapsulates the parameters for a latent factors model."""
     PICKLE_FILE_NAME = ('{imp}_{biases}_{total_factors}_{norm_factor}_'
                         '{learning_rate}_{iterations}')
 
     def __init__(self, train_ratings, total_factors, norm_factor,
                  learning_rate, max_iterations, use_biases=True,
-                 implicit_feedback=None, only_neg=False,
-                 pickle_dir='', pickle_freq=10):
+                 implicit_feedback=None, pickle_freq=None,
+                 pickle_dir=''):
+        """Constructor for a latent factors model.
+
+        train_ratings - List of Rating objects that should be used for the
+                        training of the model.
+        total_factors - Total number of latent factors to use in the model.
+        norm_factor - Normalization factor (lambda) to use in the model.
+        learning_rate - Learning rate to use for the training of the model.
+        max_iterations - Total number of iterations of stochastic gradient
+                         descent that should be used for the training of the
+                         model.
+        use_biases - Boolean indicating whether bias factors should be used in
+                     the model or not. True by default.
+        implicit_feedback - List of ImplicitFeedback objects that should be
+                            used for the training of the model. If None,
+                            implicit feedback will not be used in the model.
+                            None by default.
+        pickle_freq - Integer that determines at what interval of iterations
+                      during the stochastic gradient descent of the training
+                      for the model should the model pickle itself to save its
+                      progress. If None, the model will not pickle itself
+                      during training. None by default.
+        pickle_dir - String of the directory to save the pickle files to for
+                     this model. Unused if pickle_freq is None.
+        """
         self.train_ratings = train_ratings
         self.total_factors = total_factors
         self.norm_factor = norm_factor
-        self.start_learning_rate = learning_rate
+        self.learning_rate = learning_rate
         self.max_iterations = max_iterations
         self.use_biases = use_biases
         self.implicit_feedback = implicit_feedback
-        self.only_neg = only_neg
-        self.pickle_dir = pickle_dir
         self.pickle_freq = pickle_freq
+        self.pickle_dir = pickle_dir
 
         self.user_vectors = {}
         self.item_vectors = {}
@@ -42,34 +68,47 @@ class LatentFactorModel:
 
         if implicit_feedback is not None:
             self.negative_imp_vectors = {}
-            self.positive_imp_vectors = {}
             self._init_implicit_feedback()
 
     @classmethod
     def load_model(cls, file_path):
+        """Loads a pickled LatentFactorModel object from the given file."""
         return dill.load(open(file_path, 'rb'))
 
     def train(self):
+        """Trains the latent factors model using stochastic gradient descent
+        with the parameters specified in the constructor.
+
+        Returns True if the training completed successfully, and returns False
+        if the training was unable to complete due to some issue.
+        """
         for i in xrange(self.completed_iterations + 1, self.max_iterations + 1):
             # Print progress
             print i
-            #learning_rate = (
-                    #float(self.start_learning_rate) /
-                    #(1 + i * self.start_learning_rate))
 
             for rating in self.train_ratings:
-                successful = self._update_model(rating, self.start_learning_rate)
+                successful = self._update_model(rating, self.learning_rate)
                 if not successful:
                     return False
             self.completed_iterations += 1
 
             # Periodically save the progress of the model by pickling this
             # object
-            if i % self.pickle_freq == 0:
+            if self.pickle_freq is not None and i % self.pickle_freq == 0:
                 self._pickle_model(i)
         return True
 
     def test(self, test_ratings):
+        """Tests the latent factors model against the given list of test
+        ratings. Note that this function should only be called after the model
+        has been trained.
+
+        Prints out a summary of the root mean square error of the model on the
+        test ratings as well as the distribution of the differences between the
+        predicted ratings and the test ratings.
+
+        Returns the root mean square error of the model on the test ratings.
+        """
         diff_totals = defaultdict(int)
         total_squared_error = 0
 
@@ -82,14 +121,15 @@ class LatentFactorModel:
             else:
                 ub = 0
                 ib = 0
-            if uv is None or iv is None or ub is None or ib is None:
-                diff_totals[100] += 1
+            if uv is None or ub is None:
+                raise ModelException('User ({0}) not in model'.format(rating.user))
+                continue
+            if iv is None or ib is None:
+                raise ModelException('Item ({0}) not in model'.format(rating.item))
                 continue
 
-            # Bound guess to be between [1, 10]
             imp_uv = self._get_imp_user_vector(rating.user, uv)
             guess = self.rating_average + ub + ib + np.dot(imp_uv, iv)
-            guess = min(10, max(1, guess))
             total_squared_error += (rating.score - guess) ** 2
             diff = abs(rating.score - int(round(guess)))
             diff_totals[diff] += 1
@@ -103,6 +143,12 @@ class LatentFactorModel:
         return rmse
 
     def predict(self, test_user, test_item):
+        """Predicts the score the given user would give the given item using
+        the model. Note that this function should only be called after the
+        model has been trained.
+
+        Returns the predicted score.
+        """
         uv = self.user_vectors.get(test_user)
         iv = self.item_vectors.get(test_item)
         if self.use_biases:
@@ -121,6 +167,9 @@ class LatentFactorModel:
         return guess
 
     def _pickle_model(self, training_iterations):
+        """Pickles the LatentFactorModel object to a file. The file will be
+        labelled with the given number training iterations.
+        """
         file_name = self.PICKLE_FILE_NAME.format(
                 imp=bool(self.implicit_feedback),
                 biases=self.use_biases,
@@ -132,27 +181,40 @@ class LatentFactorModel:
         dill.dump(self, open(file_path, 'wb'), 2)
 
     def _get_item_rating_average(self):
+        """Returns the global rating average across all items in the training
+        ratings.
+        """
         item_ratings = defaultdict(int)
         item_totals = defaultdict(int)
+
+        # Get the average rating for each item
         for rating in self.train_ratings:
             item_ratings[rating.item] += rating.score
             item_totals[rating.item] += 1
         for item in item_ratings:
             item_ratings[item] = float(item_ratings[item]) / item_totals[item]
 
+        # Get the global rating average across all items
         rating_total = sum(avg for item, avg in item_ratings.items())
         return rating_total / len(item_ratings)
 
     def _init_implicit_feedback(self):
-        self.user_imp_items = defaultdict(
-                lambda: {'negative': [], 'positive': []})
+        """Forms the lists of implicit feedback items for each user in the
+        model.
+        """
+        self.user_imp_items = defaultdict(lambda: {'negative': []})
         for imp in self.implicit_feedback:
-            if imp.is_positive():
-                self.user_imp_items[imp.user]['positive'].append(imp.item)
-            else:
+            if imp.is_dropped():
                 self.user_imp_items[imp.user]['negative'].append(imp.item)
 
     def _update_model(self, rating, learning_rate):
+        """Updates the model with the given rating and learning rate using
+        stochastic gradient descent.
+
+        Returns True if the model was updated successfully with the rating, and
+        returns False if the model could not be updated with the rating because
+        of some issue.
+        """
         user_vector = self._get_user_vector(rating.user)
         item_vector = self._get_item_vector(rating.item)
         if self.use_biases:
@@ -184,7 +246,7 @@ class LatentFactorModel:
             itemb_grad = (learning_rate *
                     (error - self.norm_factor * item_bias))
 
-        # Update parameters
+        # Update parameters with their gradients
         user_vector = np.add(user_vector, userv_grad)
         item_vector = np.add(item_vector, itemv_grad)
         self.user_vectors[rating.user] = user_vector
@@ -202,6 +264,10 @@ class LatentFactorModel:
         return True
 
     def _get_imp_user_vector(self, user, user_vector):
+        """Applies modifications to the given user characteristic vector for
+        the given user due to implicit feedback and returns the resulting
+        modified user characteristic vector.
+        """
         if self.implicit_feedback is None:
             return user_vector
 
@@ -211,6 +277,8 @@ class LatentFactorModel:
         imp_user_vector = user_vector
 
         if imp_items['negative']:
+            # Sum the implicit feedback vectors for each show dropped by the
+            # given user
             neg_imp_total = np.zeros(self.total_factors)
             for neg_item in imp_items['negative']:
                 item_vector = self.negative_imp_vectors.get(neg_item)
@@ -218,27 +286,21 @@ class LatentFactorModel:
                     item_vector = self._make_random_vector(self.total_factors)
                     self.negative_imp_vectors[neg_item] = item_vector
                 neg_imp_total = np.add(neg_imp_total, item_vector)
+
+            # Normalize the sum with the inverse square root of the total
+            # number of dropped shows by the user
             neg_imp_total = np.multiply(neg_imp_total,
                     float(1) / np.sqrt(len(imp_items['negative'])))
 
             imp_user_vector = np.add(imp_user_vector, neg_imp_total)
 
-        if imp_items['positive'] and not self.only_neg:
-            pos_imp_total = np.zeros(self.total_factors)
-            for pos_item in imp_items['positive']:
-                item_vector = self.positive_imp_vectors.get(pos_item)
-                if item_vector is None:
-                    item_vector = self._make_random_vector(self.total_factors)
-                    self.positive_imp_vectors[pos_item] = item_vector
-                pos_imp_total = np.add(pos_imp_total, item_vector)
-            pos_imp_total = np.multiply(pos_imp_total,
-                    float(1) / np.sqrt(len(imp_items['positive'])))
-
-            imp_user_vector = np.add(imp_user_vector, pos_imp_total)
-
         return imp_user_vector
 
     def _update_imp_items(self, user, error, learning_rate, item_vector):
+        """Updates the implicit feedback vectors for the given user by using
+        stochastic gradient descent with the given characteristic item vector,
+        rating prediction error, and learning rate.
+        """
         if self.implicit_feedback is None:
             return
 
@@ -247,6 +309,8 @@ class LatentFactorModel:
             return
 
         if imp_items['negative']:
+            # Update each negative implicit feedback vector for dropped anime
+            # with its gradient
             neg_norm_factor = (
                     float(1) / np.sqrt(len(imp_items['negative'])))
             for neg_item in imp_items['negative']:
@@ -259,41 +323,33 @@ class LatentFactorModel:
                 ))
                 self.negative_imp_vectors[neg_item] = np.add(neg_vector, item_grad)
 
-        if imp_items['positive'] and not self.only_neg:
-            pos_norm_factor = (
-                    float(1) / np.sqrt(len(imp_items['positive'])))
-            for pos_item in imp_items['positive']:
-                pos_vector = self.positive_imp_vectors[pos_item]
-                item_grad = (np.multiply(learning_rate,
-                    np.subtract(
-                        np.multiply(error * pos_norm_factor, item_vector),
-                        np.multiply(self.norm_factor, pos_vector)
-                    )
-                ))
-                self.positive_imp_vectors[pos_item] = np.add(pos_vector, item_grad)
-
     def _make_random_vector(self, dimension):
+        """Returns a vector of random values of the given dimension."""
         return [random.uniform(-1, 1) for i in xrange(dimension)]
 
     def _get_user_vector(self, user):
+        """Gets the user characteristic vector for the given user."""
         user_vector = self.user_vectors.get(user)
         if user_vector is None:
             user_vector = self._make_random_vector(self.total_factors)
         return user_vector
 
     def _get_item_vector(self, item):
+        """Gets the item characteristic vector for the given item."""
         item_vector = self.item_vectors.get(item)
         if item_vector is None:
             item_vector = self._make_random_vector(self.total_factors)
         return item_vector
 
     def _get_user_bias(self, user):
+        """Gets the bias factor for the given user."""
         user_bias = self.user_biases.get(user)
         if user_bias is None:
             user_bias = self._make_random_vector(1)[0]
         return user_bias
 
     def _get_item_bias(self, item):
+        """Gets the bias factor for the given item."""
         item_bias = self.item_biases.get(item)
         if item_bias is None:
             item_bias = self._make_random_vector(1)[0]
