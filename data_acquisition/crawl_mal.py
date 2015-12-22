@@ -42,7 +42,7 @@ GET_TABLE_ANIME_SCORE_XPATH = './/td[3]/text()'
 
 
 # Name of the sqlite3 database to store the anime rating data
-MAL_RATINGS_DB_NAME = u'mal_ratings.db'
+MAL_RATINGS_DB_NAME = u'data_acquisition/temp_ratings.db'
 
 # Name of the table in the sqlite3 database to store the anime rating data
 MAL_RATINGS_TABLE_NAME = u'MALRatings'
@@ -169,7 +169,7 @@ def crawl_mal_ratings(request_delay, iterations):
         for mal_user in mal_users:
             # Space out requests to avoid spamming MAL servers
             sleep(request_delay)
-            print u'Mining scores for user: {0}'.format(
+            print u'Crawling scores for user: {0}'.format(
                     md5.new(mal_user).hexdigest())
             scores = get_mal_user_scores(session, mal_user)
 
